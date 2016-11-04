@@ -87,11 +87,15 @@ def check_group(bot, messages, group):
             if match:
                 msg = match.group(1)
 
+        else:
+            msg = "%s\n%s" % (title, msg)
+
         bot.post(
             bot.channel_ids[ bot.slack_channels[group] ],
-            '%sFrom %s: %s\n%s' % (
+            '%sFrom %s: %s' % (
                 ('<!channel> ' if is_new else ''),
-                author, title, msg
+                author, 
+                msg
             ),
         )
                 
