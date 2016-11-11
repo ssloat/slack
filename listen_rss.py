@@ -1,103 +1,56 @@
-import requests
 import sys
+import argparse
 import socket
 import logging
 import os
-import re
 import time
 import datetime
 from bs4 import BeautifulSoup
-from HTMLParser import HTMLParser
 
 from wheatonslack.bot import Bot
+from wheatonslack.message import Message, SessionGoogle
+
+def check_groups(bot, post=True):
+    groups = [
+#        'sloat-slackbot-testing', 
+        'wheaton-soccer', 
+        'wheaton-ultimate',
+        'wheaton-ultimate-abridged',
+    ]
+
+    for group in groups:
+        logging.info("%s: checking %s" % (str(datetime.datetime.now()), group) )
+        check_group(bot, group, post)
 
 
-class SessionGoogle:
-    url_login = "https://accounts.google.com/ServiceLogin"
-    url_auth = "https://accounts.google.com/ServiceLoginAuth"
-    def __init__(self, login, pwd):
-        self.session = requests.session()
-
-        login_html = self.session.get(SessionGoogle.url_login)
-        soup_login = BeautifulSoup(login_html.content, 'html.parser')
-
-        my_dict = {}
-        for u in soup_login.find('form').find_all('input'):
-            if u is None:
-                continue
-
-            if u.has_attr('value'):
-                my_dict[u['name']] = u['value']
-
-        # override the inputs without login and pwd:
-        my_dict['Email'] = login
-        my_dict['Passwd'] = pwd
-
-        self.session.post(SessionGoogle.url_auth, data=my_dict)
-
-    def get(self, url):
-        return self.session.get(url).text
-
-class Messages(object):
-    '''
-        this should be something other than a file
-    '''
-    fn = 'guids.txt'
-    def __init__(self):
-        self.messages = set()
-        with open(Messages.fn, 'r') as fh:
-            lines = fh.read().splitlines()
-            for guid in lines:
-                self.messages.add(guid)
-
-    def seen(self, guid):
-        return guid in self.messages
-
-    def add(self, guid):
-        with open(Messages.fn, 'a') as fh:
-            fh.write("%s\n" % guid)
-
-        self.messages.add(guid)
-
-def check_group(bot, messages, group):
+def check_group(bot, group, post=True):
     url = 'https://groups.google.com/forum/feed/%s/msgs/rss.xml?num=15' % group
 
     soup = BeautifulSoup(session.get(url), 'html.parser')
 
     items = soup.find_all('item')
     for item in items:
-        guid = item.find('link').text
-        if messages.seen(guid):
+        msg = Message(item)
+        if not Message.is_new(msg):
             continue
 
-        messages.add(guid)
+        Message.add(msg)
 
-        hp = HTMLParser()
-
-        title = hp.unescape(item.find('title').text).strip()
-        msg = hp.unescape(item.find('description').text).strip()
-        author = " ".join(
-            hp.unescape(item.find('author').text).strip().splitlines()
-        )
-
-        is_new = True
-        if title[:3] == 'Re:':
-            is_new = False
-            match = re.match('(.*?) On .* wrote: .*', msg)
-            if match:
-                msg = match.group(1)
-
+        if 'Re:' in msg.subject:
+            text = msg.body
         else:
-            msg = "%s\n%s" % (title, msg)
+            text = "<!channel> %s\n%s" % (msg.subject, msg.body)
 
-        bot.post(
-            bot.channel_ids[ bot.slack_channels[group] ],
-            '%sFrom %s: %s' % (
-                ('<!channel> ' if is_new else ''),
-                author, 
-                msg
-            ),
-        )
+            if len(msg.body('description')) >= 290:
+                text = "%s\nFull message: https://groups.google.com/d/msg/%s/%s/%s" % (
+                    text, msg.group, msg.topic, msg.link
+                )
+
+        if post:
+            bot.post(
+                bot.channel_ids[ bot.slack_channels[group] ],
+                '%sFrom %s: %s' % (author, text),
+            )
                 
 lock_socket = None
 def is_lock_free():
@@ -113,28 +66,30 @@ def is_lock_free():
         return False
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-p', '--prime', 
+        help='Prime db with existing messages',
+        action='store_true',
+    )
+
+    args = parser.parse_args()
+
     logging.basicConfig(level=logging.INFO)
-
-    groups = [
-        'sloat-slackbot-testing', 
-        'wheaton-soccer', 
-        'wheaton-ultimate',
-        'wheaton-ultimate-abridged',
-    ]
-
     if not is_lock_free():
         sys.exit()
 
-    messages = Messages()
+    bot = Bot()
     session = SessionGoogle(
         os.environ.get('SENDER_USER'), 
         os.environ.get('SENDER_PASS')
     )
-    bot = Bot()
+    if args.prime:
+        check_groups(bot, False)
+        sys.exit(0)
+
     while True:
-        for group in groups:
-            logging.info("%s: checking %s" % (str(datetime.datetime.now()), group) )
-            check_group(bot, messages, group)
+        check_groups(bot)
 
         time.sleep(180)
 
