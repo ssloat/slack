@@ -10,6 +10,8 @@ from bs4 import BeautifulSoup
 from wheatonslack.bot import Bot
 from wheatonslack.message import Message, SessionGoogle
 
+NUM = 15
+
 def check_groups(bot, post=True):
     groups = [
 #        'sloat-slackbot-testing', 
@@ -24,7 +26,7 @@ def check_groups(bot, post=True):
 
 
 def check_group(bot, group, post=True):
-    url = 'https://groups.google.com/forum/feed/%s/msgs/rss.xml?num=15' % group
+    url = 'https://groups.google.com/forum/feed/%s/msgs/rss.xml?num=%d' % (group, NUM)
 
     soup = BeautifulSoup(session.get(url), 'html.parser')
 
@@ -66,14 +68,22 @@ def is_lock_free():
         return False
 
 if __name__ == '__main__':
+    global NUM
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-p', '--prime', 
         help='Prime db with existing messages',
         action='store_true',
     )
+    parser.add_argument(
+        '-n', '--num', 
+        help='Number of messages to retrieve',
+        type=int,
+    )
 
     args = parser.parse_args()
+    if args.num:
+        NUM = args.num
 
     logging.basicConfig(level=logging.INFO)
     if not is_lock_free():
