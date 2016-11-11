@@ -3,6 +3,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine, Column, String, Integer
 
 import re
+import requests
+from bs4 import BeautifulSoup
 from HTMLParser import HTMLParser
 
 engine = create_engine('sqlite:///wheatonslack.db') #, echo=True)
@@ -41,7 +43,7 @@ class SessionGoogle:
 class Message(Base):
     __tablename__ = 'messages'
 
-    id = Column(String, primary_key=True)
+    id = Column(Integer, primary_key=True)
     group = Column(String)
     topic = Column(String)
     link = Column(String)
