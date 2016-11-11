@@ -92,7 +92,10 @@ def main():
     if args.num:
         NUM = args.num
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s %(levelname)-8s %(message)s',
+    )
     if not is_lock_free():
         sys.exit()
 
