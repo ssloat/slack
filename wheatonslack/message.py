@@ -80,7 +80,11 @@ class Message(Base):
     @staticmethod
     def is_new(msg):
         return not bool(
-            session.query(Message).filter(Message.id==msg.id).first()
+            session.query(Message).filter(
+                Message.group=msg.group,
+                Message.topic=msg.topic,
+                Message.link=msg.link,
+            ).first()
         )
 
     @staticmethod
