@@ -81,9 +81,9 @@ class Message(Base):
     def is_new(msg):
         return not bool(
             session.query(Message).filter(
-                Message.group=msg.group,
-                Message.topic=msg.topic,
-                Message.link=msg.link,
+                Message.group==msg.group,
+                Message.topic==msg.topic,
+                Message.link==msg.link,
             ).first()
         )
 
