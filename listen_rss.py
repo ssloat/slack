@@ -11,8 +11,10 @@ from wheatonslack.bot import Bot
 from wheatonslack.message import Message, SessionGoogle
 
 NUM = 15
+BOT = None
+SESSION = None
 
-def check_groups(bot, post=True):
+def check_groups(post=True):
     groups = [
 #        'sloat-slackbot-testing', 
         'wheaton-soccer', 
@@ -22,13 +24,13 @@ def check_groups(bot, post=True):
 
     for group in groups:
         logging.info("%s: checking %s" % (str(datetime.datetime.now()), group) )
-        check_group(bot, group, post)
+        check_group(group, post)
 
 
-def check_group(bot, group, post=True):
+def check_group(group, post=True):
     url = 'https://groups.google.com/forum/feed/%s/msgs/rss.xml?num=%d' % (group, NUM)
 
-    soup = BeautifulSoup(session.get(url), 'html.parser')
+    soup = BeautifulSoup(SESSION.get(url), 'html.parser')
 
     items = soup.find_all('item')
     for item in items:
@@ -43,14 +45,14 @@ def check_group(bot, group, post=True):
         else:
             text = "<!channel> %s\n%s" % (msg.subject, msg.body)
 
-            if len(msg.body('description')) >= 290:
+            if len(msg.body) >= 290:
                 text = "%s\nFull message: https://groups.google.com/d/msg/%s/%s/%s" % (
                     text, msg.group, msg.topic, msg.link
                 )
 
         if post:
-            bot.post(
-                bot.channel_ids[ bot.slack_channels[group] ],
+            BOT.post(
+                BOT.channel_ids[ BOT.slack_channels[group] ],
                 '%sFrom %s: %s' % (author, text),
             )
                 
@@ -67,8 +69,11 @@ def is_lock_free():
         logging.info("Failed to acquire lock %r" % lock_id)
         return False
 
-if __name__ == '__main__':
+def main():
     global NUM
+    global BOT
+    global SESSION
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-p', '--prime', 
@@ -89,18 +94,21 @@ if __name__ == '__main__':
     if not is_lock_free():
         sys.exit()
 
-    bot = Bot()
-    session = SessionGoogle(
+    BOT = Bot()
+    SESSION = SessionGoogle( 
         os.environ.get('SENDER_USER'), 
         os.environ.get('SENDER_PASS')
     )
     if args.prime:
-        check_groups(bot, False)
+        check_groups(False)
         sys.exit(0)
 
     while True:
-        check_groups(bot)
+        check_groups()
 
         time.sleep(180)
 
 
+
+if __name__ == '__main__':
+    main()
