@@ -33,7 +33,7 @@ def check_group(group, post=True):
     soup = BeautifulSoup(SESSION.get(url), 'html.parser')
 
     items = soup.find_all('item')
-    for item in items:
+    for item in items[::-1]:
         msg = Message(item)
         if not Message.is_new(msg):
             continue
@@ -42,8 +42,10 @@ def check_group(group, post=True):
 
         if 'Re:' in msg.subject:
             text = msg.body
+            channel = ''
         else:
-            text = "<!channel> %s\n%s" % (msg.subject, msg.body)
+            text = "%s\n%s" % (msg.subject, msg.body)
+            channel = '<!channel> '
 
             if len(msg.body) >= 290:
                 text = "%s\nFull message: https://groups.google.com/d/msg/%s/%s/%s" % (
@@ -53,7 +55,7 @@ def check_group(group, post=True):
         if post:
             BOT.post(
                 BOT.channel_ids[ BOT.slack_channels[group] ],
-                '%sFrom %s: %s' % (author, text),
+                '%sFrom %s: %s' % (channel, msg.author, text),
             )
                 
 lock_socket = None
