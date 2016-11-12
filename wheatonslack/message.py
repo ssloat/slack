@@ -1,96 +1,98 @@
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine, Column, String, Integer
+from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy import create_engine, Column, String, Integer, ForeignKey
 
 import re
-import requests
-from bs4 import BeautifulSoup
 from HTMLParser import HTMLParser
 
-engine = create_engine('sqlite:///wheatonslack.db') #, echo=True)
-Session = sessionmaker(bind=engine)
-session = Session()
-
 Base = declarative_base()
-
-class SessionGoogle:
-    url_login = "https://accounts.google.com/ServiceLogin"
-    url_auth = "https://accounts.google.com/ServiceLoginAuth"
-    def __init__(self, login, pwd):
-        self.session = requests.session()
-
-        login_html = self.session.get(SessionGoogle.url_login)
-        soup_login = BeautifulSoup(login_html.content, 'html.parser')
-
-        my_dict = {}
-        for u in soup_login.find('form').find_all('input'):
-            if u is None:
-                continue
-
-            if u.has_attr('value'):
-                my_dict[u['name']] = u['value']
-
-        # override the inputs without login and pwd:
-        my_dict['Email'] = login
-        my_dict['Passwd'] = pwd
-
-        self.session.post(SessionGoogle.url_auth, data=my_dict)
-
-    def get(self, url):
-        return self.session.get(url).text
 
 
 class Message(Base):
     __tablename__ = 'messages'
 
     id = Column(Integer, primary_key=True)
-    group = Column(String)
-    topic = Column(String)
+    topic_id = Column(Integer, ForeignKey('topics.id'))
     link = Column(String)
-    subject = Column(String)
     body = Column(String)
     author = Column(String)
 
-    def __init__(self, item):
-        self.group, self.topic = item.find('guid').text.split('/')[-2:]
-        self.link = item.find('link').text.split('/')[-1]
+    topic = relationship('Topic')
 
+    def __init__(self, topic, link, body, author):
+        self.topic = topic
+        self.link = link
+        self.body = body
+        self.author = author
+
+    @staticmethod
+    def query_or_new(session, item):
         hp = HTMLParser()
 
-        self.subject = hp.unescape(item.find('title').text).strip()
-        self.body = hp.unescape(
+        topic = Topic.query_or_new(session, item)
+        link = item.find('link').text.split('/')[-1]
+
+        body = hp.unescape(
             item.find('description').text.replace(' Sent from my iPhone', '')
         ).strip()
-        self.author = " ".join(
+
+        match = re.match('(.*?)( >)?\s+On .* wrote: .*', body)
+        if match:
+            body = match.group(1)
+
+        author = " ".join(
             hp.unescape(item.find('author').text).strip().splitlines()
         )
 
-        if 'Re:' in self.subject:
-            match = re.match('(.*?)( >)?\s+On .* wrote: .*', self.body)
-            if match:
-                self.body = match.group(1)
- 
+        if not topic.id:
+            return Message(topic, link, body, author)
+
+        m = session.query(Message).filter(
+            Message.topic_id==topic.id,
+            Message.link==link,
+        ).first()
+
+        if m:
+            return m
+
+        return Message(topic, link, body, author)
+
+class Topic(Base):
+    __tablename__ = 'topics'
+
+    id = Column(Integer, primary_key=True)
+    group = Column(String)
+    name = Column(String)
+    subject = Column(String)
+
+    def __init__(self, group, name, subject):
+        self.group = group
+        self.name = name
+        self.subject = subject
 
     @staticmethod
-    def is_new_topic(msg):
-        return not bool(
-            session.query(Message).filter(Message.topic==msg.topic).first()
-        )
+    def query_or_new(session, item):
+        group, name = item.find('guid').text.split('/')[-2:]
 
-    @staticmethod
-    def is_new(msg):
-        return not bool(
-            session.query(Message).filter(
-                Message.group==msg.group,
-                Message.topic==msg.topic,
-                Message.link==msg.link,
-            ).first()
-        )
+        t = session.query(Topic).filter(
+            Topic.group==group,
+            Topic.name==name,
+        ).first()
 
-    @staticmethod
-    def add(msg):
-        session.add(msg)
-        session.commit()
+        if t:
+            return t
 
-Base.metadata.create_all(engine)
+        subject = HTMLParser().unescape(item.find('title').text).strip()
+        return Topic(group, name, subject)
 
+def get_session(name):
+    engine = create_engine('sqlite:///'+name)#, echo=True)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+
+    Base.metadata.create_all(engine)
+
+    return session
+
+if __name__ == '__main__':
+    get_session()
