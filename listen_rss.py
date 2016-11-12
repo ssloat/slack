@@ -1,3 +1,4 @@
+import requests
 import sys
 import argparse
 import socket
@@ -8,55 +9,88 @@ import datetime
 from bs4 import BeautifulSoup
 
 from wheatonslack.bot import Bot
-from wheatonslack.message import Message, SessionGoogle
+from wheatonslack.message import Message, get_session
 
-NUM = 15
-BOT = None
-SESSION = None
+class SessionGoogle(object):
+    url_login = "https://accounts.google.com/ServiceLogin"
+    url_auth = "https://accounts.google.com/ServiceLoginAuth"
+    def __init__(self, login, pwd):
+        self.session = requests.session()
 
-def check_groups(post=True):
+        login_html = self.session.get(SessionGoogle.url_login)
+        soup_login = BeautifulSoup(login_html.content, 'html.parser')
+
+        my_dict = {}
+        for u in soup_login.find('form').find_all('input'):
+            if u is None:
+                continue
+
+            if u.has_attr('value'):
+                my_dict[u['name']] = u['value']
+
+        # override the inputs without login and pwd:
+        my_dict['Email'] = login
+        my_dict['Passwd'] = pwd
+
+        self.session.post(SessionGoogle.url_auth, data=my_dict)
+
+    def get(self, url):
+        return self.session.get(url).text
+
+class Checker(object):
     groups = [
-#        'sloat-slackbot-testing', 
+        'sloat-slackbot-testing', 
         'wheaton-soccer', 
         'wheaton-ultimate',
         'wheaton-ultimate-abridged',
     ]
 
-    for group in groups:
-        logging.info("%s: checking %s" % (str(datetime.datetime.now()), group) )
-        check_group(group, post)
+    def __init__(self, db_session, web_session, bot, num):
+        self.db_session = db_session
+        self.web_session = web_session
+        self.bot = bot
+        self.num = num
+
+    def check_groups(self, post=True):
+        for group in self.groups:
+            logging.info("%s: checking %s" % (str(datetime.datetime.now()), group) )
+            check_group(group, post)
 
 
-def check_group(group, post=True):
-    url = 'https://groups.google.com/forum/feed/%s/msgs/rss.xml?num=%d' % (group, NUM)
+    def check_group(self, group, post=True):
+        url = 'https://groups.google.com/forum/feed/%s/msgs/rss.xml?num=%d' % (group, self.num)
 
-    soup = BeautifulSoup(SESSION.get(url), 'html.parser')
+        soup = BeautifulSoup(self.web_session.get(url), 'html.parser')
 
-    items = soup.find_all('item')
-    for item in items[::-1]:
-        msg = Message(item)
-        if not Message.is_new(msg):
-            continue
+        items = soup.find_all('item')
+        for item in items[::-1]:
+            msg = Message.query_or_new(self.db_session, item)
+            if msg.id is not None:
+                continue
 
-        Message.add(msg)
+            if msg.topic.id is not None:
+                text = msg.body
+                channel = ''
+            else:
+                text = "%s\n%s" % (msg.topic.subject, msg.body)
+                channel = '<!channel> '
 
-        if 'Re:' in msg.subject:
-            text = msg.body
-            channel = ''
-        else:
-            text = "%s\n%s" % (msg.subject, msg.body)
-            channel = '<!channel> '
+                if len(msg.body) >= 290:
+                    text = "%s\nFull message: https://groups.google.com/d/msg/%s/%s/%s" % (
+                        text, msg.topic.group, msg.topic.name, msg.link
+                    )
 
-            if len(msg.body) >= 290:
-                text = "%s\nFull message: https://groups.google.com/d/msg/%s/%s/%s" % (
-                    text, msg.group, msg.topic, msg.link
+            self.db_session.add(msg)
+            self.db_session.commit()
+
+            if post:
+                self.bot.post(
+                    self.bot.channel_ids[ self.bot.slack_channels[group] ],
+                    '%s[%d]From %s: %s' % (channel, msg.topic.id, msg.author, text),
                 )
 
-        if post:
-            BOT.post(
-                BOT.channel_ids[ BOT.slack_channels[group] ],
-                '%sFrom %s: %s' % (channel, msg.author, text),
-            )
+            else:
+                print '%s[%d]From %s: %s' % (channel, msg.topic.id, msg.author, text)
                 
 lock_socket = None
 def is_lock_free():
@@ -72,10 +106,6 @@ def is_lock_free():
         return False
 
 def main():
-    global NUM
-    global BOT
-    global SESSION
-
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '-p', '--prime', 
@@ -87,11 +117,12 @@ def main():
         help='Number of messages to retrieve',
         type=int,
     )
+    parser.add_argument(
+        '--db', 
+        help='DB filename',
+    )
 
     args = parser.parse_args()
-    if args.num:
-        NUM = args.num
-
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s %(levelname)-8s %(message)s',
@@ -99,19 +130,24 @@ def main():
     if not is_lock_free():
         sys.exit()
 
-    BOT = Bot()
-    SESSION = SessionGoogle( 
-        os.environ.get('SENDER_USER'), 
-        os.environ.get('SENDER_PASS')
+    checker = Checker(
+        get_session(args.db or 'wheatonultimate.db'),
+        SessionGoogle( 
+            os.environ.get('SENDER_USER'), 
+            os.environ.get('SENDER_PASS')
+        ),
+        Bot(),
+        (args.num or 15)
     )
+
     if args.prime:
-        check_groups(False)
+        checker.check_groups(False)
         sys.exit(0)
 
     while True:
-        check_groups()
+        checker.check_groups()
 
-        time.sleep(180)
+        time.sleep(300)
 
 
 
