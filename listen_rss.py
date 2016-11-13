@@ -54,7 +54,7 @@ class Checker(object):
     def check_groups(self, post=True):
         for group in self.groups:
             logging.info("%s: checking %s" % (str(datetime.datetime.now()), group) )
-            check_group(group, post)
+            self.check_group(group, post)
 
 
     def check_group(self, group, post=True):
