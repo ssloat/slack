@@ -6,6 +6,7 @@ import logging
 import os
 import time
 import datetime
+import pytz
 from bs4 import BeautifulSoup
 
 from wheatonslack.bot import Bot
@@ -144,10 +145,22 @@ def main():
         checker.check_groups(False)
         sys.exit(0)
 
+    cst = pytz.timezone('America/Chicago')
     while True:
         checker.check_groups()
 
-        time.sleep(300)
+        now = cst.localize(datetime.datetime.now())
+        if now.hour < 7:
+            target = now.replace(hour=7, minute=0, second=0)
+            time.sleep(
+                (target - now).total_seconds()
+            )
+
+        elif now.hour >= 22 or now.hour < 11:
+            time.sleep(1200)
+
+        else:
+            time.sleep(600)
 
 
 
