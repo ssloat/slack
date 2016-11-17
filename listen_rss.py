@@ -149,7 +149,7 @@ def main():
     while True:
         checker.check_groups()
 
-        now = cst.localize(datetime.datetime.now())
+        now = pytz.utc.localize(datetime.datetime.now()).astimezone(cst)
         if now.hour < 7:
             target = now.replace(hour=7, minute=0, second=0)
             time.sleep(
