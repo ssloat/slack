@@ -5,6 +5,8 @@ import pytz
 from bs4 import BeautifulSoup
 
 from wheatonslack.message import Message
+
+logger = logging.getLogger('wheatonslack.googlegroups')
  
 class SessionGoogle(object):
     url_login = "https://accounts.google.com/ServiceLogin"
@@ -50,7 +52,7 @@ class GroupsChecker(object):
         if datetime.datetime.now() > self.next_check:
 
             for group in self.groups:
-                logging.info("%s: checking %s" % (str(datetime.datetime.now()), group) )
+                logger.info("checking %s" % group)
                 self.check_group(bot, group, post)
 
             self.next_check = self._next_check()
@@ -92,7 +94,7 @@ class GroupsChecker(object):
                 )
 
             else:
-                logging.info(
+                logger.info(
                     '%s[%d]From %s: %s' % (channel, msg.topic.id, msg.author, text)
                 )
 
