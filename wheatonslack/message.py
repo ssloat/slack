@@ -82,7 +82,12 @@ class Topic(Base):
         if t:
             return t
 
-        subject = HTMLParser().unescape(item.find('title').text).strip()
+        subject = (
+            HTMLParser()
+                .unescape(item.find('title').text)
+                .strip()
+                .replace('[wheaton-ultimate] ', '')
+        )
         return Topic(group, name, subject)
 
 def get_session(name):
