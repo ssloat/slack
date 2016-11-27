@@ -42,25 +42,26 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s %(name)-18s %(levelname)-8s %(message)s',
+        format='%(asctime)s %(name) %(levelname)-8s %(message)s',
     )
     if not is_lock_free():
         sys.exit()
 
     checker = GroupsChecker(
         os.environ.get('SENDER_USER'), 
-        os.environ.get('SENDER_PASS')
+        os.environ.get('SENDER_PASS'),
         get_session(args.db or 'wheatonultimate.db'),
         (args.num or 15)
     )
 
     if args.prime:
-        checker.check_groups(False)
+        checker.check_groups(bot, False)
         sys.exit(0)
 
     bot = Bot()
+    bot.slack_client.rtm_connect()
     while True:
-        checker.check_groups()
+        checker.check_groups(bot)
 
         slack_out = bot.slack_client.rtm_read()
         bot.parse_slack_output(slack_out)
