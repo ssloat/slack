@@ -42,7 +42,7 @@ def main():
     args = parser.parse_args()
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s %(name) %(levelname)-8s %(message)s',
+        format='%(asctime)s %(name)s %(levelname)-8s %(message)s',
     )
     if not is_lock_free():
         sys.exit()
