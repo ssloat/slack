@@ -4,6 +4,8 @@ import logging
 
 from slackclient import SlackClient
 
+logger = logging.getLogger('wheatonslack.bot')
+
 BOT_ID = os.environ.get('BOT_ID')
 SENDER_USER = os.environ.get('SENDER_USER')
 SENDER_PASS = os.environ.get('SENDER_PASS')
@@ -50,8 +52,7 @@ class Bot(object):
         )
 
     def rtm_post(self, channel_id, text):
-        channel = self.channels.get(channel_id, channel_id)
-        self.slack_client.rtm_send_message(channel, text)
+        self.slack_client.rtm_send_message(channel_id, text)
 
 
     def parse_slack_output(self, slack_rtm_output):
@@ -71,7 +72,7 @@ class Bot(object):
 
         for output in slack_rtm_output:
             if output and 'text' in output:
-                logging.debug(output)
+                logger.debug(output)
 
                 if 'user' not in output:
                     """
@@ -98,7 +99,7 @@ class Bot(object):
 
                     continue
 
-                logging.info(output)
+                logger.info(output)
 
                 self.rtm_post(
                     channel_id=channel_id,
