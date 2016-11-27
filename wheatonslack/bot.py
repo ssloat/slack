@@ -1,5 +1,6 @@
 import os
 import smtplib
+import logging
 
 from slackclient import SlackClient
 
@@ -70,8 +71,7 @@ class Bot(object):
 
         for output in slack_rtm_output:
             if output and 'text' in output:
-                print output
-
+                logging.debug(output)
 
                 if 'user' not in output:
                     """
@@ -97,6 +97,8 @@ class Bot(object):
                     """
 
                     continue
+
+                logging.info(output)
 
                 self.rtm_post(
                     channel_id=channel_id,
