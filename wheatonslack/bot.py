@@ -48,66 +48,9 @@ class Bot(object):
             as_user=True
         )
 
-
-    def handle_command(self, cmd):
-        user = self.members[cmd.user_id]
-        channel = self.channels[cmd.channel_id]
-        print channel, user.real_name, cmd.text
-
-        if channel not in google_group_emails:
-            self.post(
-                channel_id=cmd.channel_id,
-                text="<@%s>, this channel does not have a google group assigned" % user.name,
-            )
-            return
-
-
-        if ':' not in cmd.text:
-            self.post(
-                channel_id=cmd.channel_id,
-                text='<@%s>, please use format:  <subject>: <body>' % user.name,
-            )
-            return
-
-        try:
-            subject, body = cmd.text.split(':')
-
-        except ValueError:
-            self.post(
-                channel_id=cmd.channel_id,
-                text='<@%s>, too many :\'s.  please use format:  <subject>: <body>' % user.name,
-            )
-            return
-
-        to_addr = '%s@googlegroups.com' % google_group_emails[channel]
-
-        message = """From: {from_name} on Slack <{from_email}>
-To: {to_addr}
-Subject: {subject}
-Reply-To: {reply_email}
-Return-Path: {return_path}
-
-{body}
-""".format(
-            from_name = user.real_name,
-            from_email = user.email,
-            to_addr = to_addr,
-            subject = subject,
-            reply_email = user.email,
-            return_path = user.email,
-            body = body,
-        )
-
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(SENDER_USER, SENDER_PASS)
-        server.sendmail(user.email, [to_addr], message)
-        server.quit()
-
-        self.post(
-            channel_id=cmd.channel_id,
-            text='<@%s>, your message has been announced' % user.name,
-        )
+    def rtm_post(self, channel_id, text):
+        channel = self.channels.get(channel_id, channel_id)
+        self.slack_client.rtm_send_message(channel, text)
 
 
     def parse_slack_output(self, slack_rtm_output):
@@ -118,28 +61,46 @@ Return-Path: {return_path}
         """
 
         commands = [
-            'send email:  @googlebot announce: {subject}: {body}',
+            #'send email:  @googlebot announce: {subject}: {body}',
+            'do nothing.',
         ]
 
         if not slack_rtm_output or len(slack_rtm_output) == 0:
             return
 
         for output in slack_rtm_output:
-            if output and 'text' in output and '<@%s>' % (BOT_ID) in output['text']:
+            if output and 'text' in output:
+                print output
+
+
+                if 'user' not in output:
+                    """
+                        message without user is: a post from googlebot
+                    """
+                    continue
+
                 user_id = output['user']
                 channel_id = output['channel']
 
-                if '<@%s> announce ' % (BOT_ID) in output['text']:
-                    return Command(
-                        output['text'].split('<@%s> announce ' % BOT_ID)[1].strip(), 
-                        user_id, 
-                        channel_id
-                    )
+                if channel_id in self.channels:
+                    """
+                        googlebot only responds to direct messages
+                    """
+                    """
+                    if '<@%s>' % (BOT_ID) in output['text']:
+                        self.rtm_post(
+                            channel_id=channel_id,
+                            text="<@%s> Let's chat in private" % ( 
+                                self.members[user_id].name,
+                            )
+                        )
+                    """
 
-                self.post(
-                    channel=channel_id,
-                    text="<@%s> I don't know that one.  I can:\n%s" % (
-                        self.members[user_id].name, 
+                    continue
+
+                self.rtm_post(
+                    channel_id=channel_id,
+                    text="I don't know that one.  I can:\n%s" % (
                         "\n".join(commands)
                     ),
                 )
