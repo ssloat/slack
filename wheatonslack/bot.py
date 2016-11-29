@@ -110,7 +110,7 @@ class Bot(object):
             for cmd in self.commands:
                 match = cmd.match(output)
                 if match:
-                    texts = cmd.run(match, self.db_session):
+                    texts = cmd.run(match, self.db_session)
                     self.rtm_post(channel_id, "\n".join(texts))
 
                     matched = True
