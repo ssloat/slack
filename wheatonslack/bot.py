@@ -126,10 +126,10 @@ class Bot(object):
 
 
 class CommandRecent(object):
-    help_text = '[n] recent messages'
+    help_text = 'show [n?] recent messages'
 
     def match(self, output):
-        return re.search('((\d+) )?recent', output['text'])
+        return re.search('show ((\d+) )?recent', output['text'])
 
     def run(self, match, db):
         n = 5
