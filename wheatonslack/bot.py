@@ -137,8 +137,7 @@ class CommandRecent(object):
             n = int(match.group(1))
 
         topics = db.query(Topic).filter(
-            #Topic.group=='wheaton-ultimate'
-            Topic.group=='sloat-slackbot-testing'
+            Topic.group=='wheaton-ultimate'
         ).order_by(Topic.id).all()
 
         for topic in reversed(topics[-1*n:]):
