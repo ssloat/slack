@@ -110,8 +110,8 @@ class Bot(object):
             for cmd in self.commands:
                 match = cmd.match(output)
                 if match:
-                    for text in cmd.run(match, self.db_session):
-                        self.rtm_post(channel_id, text)
+                    texts = cmd.run(match, self.db_session):
+                    self.rtm_post(channel_id, "\n".join(texts))
 
                     matched = True
                     break
@@ -140,12 +140,17 @@ class CommandRecent(object):
             Topic.group=='wheaton-ultimate'
         ).order_by(Topic.id).all()
 
+        texts = []
         for topic in reversed(topics[-1*n:]):
             m = db.query(Message).filter(
                 Message.topic_id==topic.id
             ).order_by(Message.id).first()
 
-            yield "[%d] From %s:  %s" % (topic.id, m.author, topic.subject)
+            texts.append(
+                "[%d] From %s:  %s" % (topic.id, m.author, topic.subject)
+            )
+
+        return texts
 
 
 class CommandLink(object):
@@ -162,7 +167,7 @@ class CommandLink(object):
             topic.group, topic.name
         )
 
-        return (text,)
+        return [text]
 
 class CommandReplay(object):
     help_text = 'replay [n]'
@@ -174,9 +179,14 @@ class CommandReplay(object):
         n = int(match.group(1))
 
         msgs = db.query(Message).filter(Message.topic_id==n).order_by(Message.id).all()
-        yield "%s:" % (msgs[0].topic.subject)
-        for msg in msgs:
-            yield  "From %s: %s" % (msg.author, msg.body)
+
+        texts = ["%s:" % (msgs[0].topic.subject)]
+        texts.extend([
+            "From %s: %s" % (msg.author, msg.body)
+            for msg in msgs
+        ])
+
+        return texts
 
 
 
