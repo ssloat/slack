@@ -47,10 +47,12 @@ def main():
     if not is_lock_free():
         sys.exit()
 
+    db_session = get_session(args.db or 'wheatonultimate.db')
+
     checker = GroupsChecker(
         os.environ.get('SENDER_USER'), 
         os.environ.get('SENDER_PASS'),
-        get_session(args.db or 'wheatonultimate.db'),
+        db_session,
         (args.num or 15)
     )
 
@@ -58,10 +60,10 @@ def main():
         checker.check_groups(bot, False)
         sys.exit(0)
 
-    bot = Bot()
+    bot = Bot(db_session)
     bot.slack_client.rtm_connect()
     while True:
-        checker.check_groups(bot)
+    #    checker.check_groups(bot)
 
         slack_out = bot.slack_client.rtm_read()
         bot.parse_slack_output(slack_out)

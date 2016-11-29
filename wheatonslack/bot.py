@@ -1,10 +1,13 @@
 import os
+import re
 import smtplib
 import logging
 
 from slackclient import SlackClient
 
-logger = logging.getLogger('wheatonslack.bot')
+from wheatonslack.message import Message, Topic
+
+logger = logging.getLogger(__name__)
 
 BOT_ID = os.environ.get('BOT_ID')
 SENDER_USER = os.environ.get('SENDER_USER')
@@ -19,8 +22,15 @@ google_group_emails = {
 }
 
 class Bot(object):
-    def __init__(self):
+    def __init__(self, db_session):
+        self.db_session = db_session
+
         self.slack_client = SlackClient(os.environ.get('SLACK_BOT_TOKEN'))
+        self.commands = [
+            CommandRecent(),
+            CommandLink(),
+            CommandReplay(),
+        ]
 
         self._init_channels()
         self._init_members()
@@ -62,58 +72,115 @@ class Bot(object):
             directed at the Bot, based on its ID.
         """
 
-        commands = [
-            #'send email:  @googlebot announce: {subject}: {body}',
-            'do nothing.',
-        ]
-
         if not slack_rtm_output or len(slack_rtm_output) == 0:
             return
 
-        for output in slack_rtm_output:
-            if output and 'text' in output:
-                logger.debug(output)
+        outputs = [x for x in slack_rtm_output if x and 'text' in x]
+        for output in outputs:
+            logger.debug(output)
 
-                if 'user' not in output:
-                    """
-                        message without user is: a post from googlebot
-                    """
-                    continue
+            if 'user' not in output:
+                """
+                    message without user is: a post from googlebot
+                """
+                continue
 
-                user_id = output['user']
-                channel_id = output['channel']
+            user_id = output['user']
+            channel_id = output['channel']
 
-                if channel_id in self.channels:
-                    """
-                        googlebot only responds to direct messages
-                    """
-                    """
-                    if '<@%s>' % (BOT_ID) in output['text']:
-                        self.rtm_post(
-                            channel_id=channel_id,
-                            text="<@%s> Let's chat in private" % ( 
-                                self.members[user_id].name,
-                            )
+            if channel_id in self.channels:
+                """
+                    googlebot only responds to direct messages
+                """
+                """
+                if '<@%s>' % (BOT_ID) in output['text']:
+                    self.rtm_post(
+                        channel_id=channel_id,
+                        text="<@%s> Let's chat in private" % ( 
+                            self.members[user_id].name,
                         )
-                    """
+                    )
+                """
 
-                    continue
+                continue
 
-                logger.info(output)
+            logger.info(output)
 
+            matched = False
+            for cmd in self.commands:
+                match = cmd.match(output)
+                if match:
+                    for text in cmd.run(match, self.db_session):
+                        self.rtm_post(channel_id, text)
+
+                    matched = True
+                    break
+
+            if not matched:
                 self.rtm_post(
                     channel_id=channel_id,
                     text="I don't know that one.  I can:\n%s" % (
-                        "\n".join(commands)
+                        "\n".join([x.help_text for x in self.commands])
                     ),
                 )
 
 
-class Command(object):
-    def __init__(self, text, user_id, channel_id):
-        self.text = text
-        self.user_id = user_id
-        self.channel_id = channel_id
+class CommandRecent(object):
+    help_text = '[n] recent messages'
+
+    def match(self, output):
+        return re.search('((\d+) )?recent', output['text'])
+
+    def run(self, match, db):
+        n = 5
+        if match.group(1):
+            n = int(match.group(1))
+
+        topics = db.query(Topic).filter(
+            #Topic.group=='wheaton-ultimate'
+            Topic.group=='sloat-slackbot-testing'
+        ).order_by(Topic.id).all()
+
+        for topic in reversed(topics[-1*n:]):
+            m = db.query(Message).filter(
+                Message.topic_id==topic.id
+            ).order_by(Message.id).first()
+
+            yield "[%d] From %s:  %s" % (topic.id, m.author, topic.subject)
+
+
+class CommandLink(object):
+    help_text = 'link for [n]'
+
+    def match(self, output):
+        return re.search('link for (\d+)', output['text'])
+
+    def run(self, match, db):
+        n = int(match.group(1))
+
+        topic = db.query(Topic).filter(Topic.id==n).first()
+        text = "https://groups.google.com/forum/#!category-topic/%s/%s" % (
+            topic.group, topic.name
+        )
+
+        return (text,)
+
+class CommandReplay(object):
+    help_text = 'replay [n]'
+
+    def match(self, output):
+        return re.search('replay (\d+)', output['text'])
+
+    def run(self, match, db):
+        n = int(match.group(1))
+
+        msgs = db.query(Message).filter(Message.topic_id==n).order_by(Message.id).all()
+        yield "%s:" % (msgs[0].topic.subject)
+        for msg in msgs:
+            yield  "From %s: %s" % (msg.author, msg.body)
+
+
+
 
 class User(object):
     def __init__(self, config):
