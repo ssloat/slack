@@ -90,6 +90,12 @@ class Topic(Base):
         )
         return Topic(group, name, subject)
 
+    def link(self):
+        return "https://groups.google.com/forum/#!category-topic/%s/%s" % (
+            self.group, self.name
+        )
+
+
 def get_session(name):
     engine = create_engine('sqlite:///'+name)#, echo=True)
     Session = sessionmaker(bind=engine)
