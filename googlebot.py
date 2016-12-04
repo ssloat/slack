@@ -63,7 +63,7 @@ def main():
     bot = Bot(db_session)
     bot.slack_client.rtm_connect()
     while True:
-    #    checker.check_groups(bot)
+        checker.check_groups(bot)
 
         slack_out = bot.slack_client.rtm_read()
         bot.parse_slack_output(slack_out)

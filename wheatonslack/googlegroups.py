@@ -4,6 +4,7 @@ import datetime
 import pytz
 from bs4 import BeautifulSoup
 
+from config import GROUPS
 from wheatonslack.message import Message
 
 logger = logging.getLogger('wheatonslack.googlegroups')
@@ -35,11 +36,6 @@ class SessionGoogle(object):
         return self.session.get(url).text
 
 class GroupsChecker(object):
-    groups = [
-#        'sloat-slackbot-testing', 
-        'wheaton-soccer', 
-        'wheaton-ultimate',
-    ]
 
     def __init__(self, user, pwd, db_session, num):
         self.db_session = db_session
@@ -51,7 +47,7 @@ class GroupsChecker(object):
     def check_groups(self, bot, post=True):
         if datetime.datetime.now() > self.next_check:
 
-            for group in self.groups:
+            for group in GROUPS.keys():
                 logger.info("checking %s" % group)
                 self.check_group(bot, group, post)
 
@@ -75,9 +71,6 @@ class GroupsChecker(object):
             else:
                 text = "%s\n%s" % (msg.topic.subject, msg.body)
                 channel = '<!channel> '
-                if msg.author == 'Rebekah Sides':
-                    # sorry Rebekah - not interested in your messages
-                    channel = ''
 
                 if len(msg.body) >= 250:
                     text = "%s\nFull message: https://groups.google.com/d/msg/%s/%s/%s" % (
@@ -89,7 +82,7 @@ class GroupsChecker(object):
 
             if post:
                 bot.post(
-                    bot.channel_ids[ bot.slack_channels[group] ],
+                    bot.channel_ids[ GROUPS[group] ],
                     '%s[%d]From %s: %s' % (channel, msg.topic.id, msg.author, text),
                 )
 

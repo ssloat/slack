@@ -1,5 +1,6 @@
 *.log
 *.swp
 *.pyc
+config.py
 guids.txt
 setup.sh

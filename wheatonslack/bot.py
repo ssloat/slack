@@ -13,14 +13,6 @@ BOT_ID = os.environ.get('BOT_ID')
 SENDER_USER = os.environ.get('SENDER_USER')
 SENDER_PASS = os.environ.get('SENDER_PASS')
 
-google_group_emails = {
-    'sports-ultimate': 'wheaton-ultimate-abridged',
-    'sports-soccer': 'wheaton-soccer',
-    'prayerandpraise': 'p-and-p',
-    'social': 'wheaton-ultimate',
-    'sloat-testing': 'sloat-slackbot-testing',
-}
-
 class Bot(object):
     def __init__(self, db_session):
         self.db_session = db_session
@@ -42,9 +34,6 @@ class Bot(object):
 
         self.channels = dict([(x['id'], x['name']) for x in channels['channels']])
         self.channel_ids = dict( (v, k) for k, v in self.channels.items() )
-        self.slack_channels = dict( 
-            (v, k) for k, v in google_group_emails.items()
-        )
 
     def _init_members(self):
         members = self.slack_client.api_call('users.list')
