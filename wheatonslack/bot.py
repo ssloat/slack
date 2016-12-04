@@ -36,11 +36,14 @@ class Bot(object):
         self.channel_ids = dict( (v, k) for k, v in self.channels.items() )
 
     def _init_members(self):
+    """
         members = self.slack_client.api_call('users.list')
         if not members.get('ok', False):
             raise Exception('could not get user list')
 
         self.members = dict( (m['id'], User(m)) for m in members['members'] )
+    """
+        pass
 
     def post(self, channel_id, text):
         self.slack_client.api_call(
@@ -66,6 +69,7 @@ class Bot(object):
 
         outputs = [x for x in slack_rtm_output if x and 'text' in x]
         for output in outputs:
+            output['text'] = output['text'].lower()
             logger.debug(output)
 
             if 'user' not in output:
@@ -99,8 +103,8 @@ class Bot(object):
             for cmd in self.commands:
                 match = cmd.match(output)
                 if match:
-                    texts = cmd.run(match, self.db_session)
-                    self.rtm_post(channel_id, "\n".join(texts))
+                    text = cmd.run(match, self.db_session)
+                    self.rtm_post(channel_id, texts)
 
                     matched = True
                     break
@@ -115,15 +119,13 @@ class Bot(object):
 
 
 class CommandRecent(object):
-    help_text = 'show [n?] recent messages'
+    help_text = 'recent [n]'
 
     def match(self, output):
-        return re.search('show ((\d+) )?recent', output['text'])
+        return re.search('recent [n]', output['text'])
 
     def run(self, match, db):
-        n = 5
-        if match.group(1):
-            n = int(match.group(1))
+        n = int(match.group(1))
 
         topics = db.query(Topic).filter(
             Topic.group=='wheaton-ultimate'
@@ -139,24 +141,20 @@ class CommandRecent(object):
                 "[%d] From %s:  %s" % (topic.id, m.author, topic.subject)
             )
 
-        return texts
+        return "\n".join(texts)
 
 
 class CommandLink(object):
-    help_text = 'link for [n]'
+    help_text = 'link [n]'
 
     def match(self, output):
-        return re.search('link for (\d+)', output['text'])
+        return re.search('link (\d+)', output['text'])
 
     def run(self, match, db):
         n = int(match.group(1))
 
         topic = db.query(Topic).filter(Topic.id==n).first()
-        text = "https://groups.google.com/forum/#!category-topic/%s/%s" % (
-            topic.group, topic.name
-        )
-
-        return [text]
+        return topic.link()
 
 class CommandReplay(object):
     help_text = 'replay [n]'
@@ -175,7 +173,7 @@ class CommandReplay(object):
             for msg in msgs
         ])
 
-        return texts
+        return "\n".join(texts)
 
 
 
