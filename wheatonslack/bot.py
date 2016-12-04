@@ -122,7 +122,7 @@ class CommandRecent(object):
     help_text = 'recent [n]'
 
     def match(self, output):
-        return re.search('recent [n]', output['text'])
+        return re.search('recent (\d+)', output['text'])
 
     def run(self, match, db):
         n = int(match.group(1))
