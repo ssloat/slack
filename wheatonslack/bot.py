@@ -104,7 +104,7 @@ class Bot(object):
                 match = cmd.match(output)
                 if match:
                     text = cmd.run(match, self.db_session)
-                    self.rtm_post(channel_id, texts)
+                    self.rtm_post(channel_id, text)
 
                     matched = True
                     break
