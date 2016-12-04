@@ -36,13 +36,13 @@ class Bot(object):
         self.channel_ids = dict( (v, k) for k, v in self.channels.items() )
 
     def _init_members(self):
-    """
+        """
         members = self.slack_client.api_call('users.list')
         if not members.get('ok', False):
             raise Exception('could not get user list')
 
         self.members = dict( (m['id'], User(m)) for m in members['members'] )
-    """
+        """
         pass
 
     def post(self, channel_id, text):
