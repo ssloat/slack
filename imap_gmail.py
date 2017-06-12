@@ -2,6 +2,8 @@ import imaplib
 import email
 import datetime
 import os
+import argparse
+import logging
 
 from pymongo import MongoClient
 
@@ -21,8 +23,6 @@ def main():
         level=logging.INFO,
         format='%(asctime)s %(name)s %(levelname)-8s %(message)s',
     )
-    if not is_lock_free():
-        sys.exit()
 
     mongo = MongoClient(os.environ.get('MONGO_DB_URI'))
     bot = Bot(None)
