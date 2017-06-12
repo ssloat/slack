@@ -23,8 +23,7 @@ class Inbox(object):
 
         result, data = self.mail.uid('search', None, "(SENTSINCE %s)" % date.strftime('%d-%b-%Y'))
 
-        #mail_ids = [uid for uid in data[0].split() if not self.is_processed(uid)]
-        mail_ids = data[0].split() 
+        mail_ids = [uid for uid in data[0].split() if not self.is_processed(uid)]
 
         for uid in mail_ids:
             self.process_uid(uid)
@@ -39,40 +38,6 @@ class Inbox(object):
         txt = get_text(message) 
         if not txt:
             txt = '<Could not parse message>'
-            """
-            #print "Could not parse message. From %s: %s" % (message['From'], message['Subject'])
-            #return
-            typ, msg_data = self.mail.uid('fetch', uid, '(BODY.PEEK[TEXT])')
-            match = re.search(
-                r'Content-Type: text/plain; charset=\W*?(.*?)------=_Part_', 
-                #r'Content-Type: text/plain; (.*)', 
-                msg_data[0][1],
-                re.DOTALL
-            )
-
-            if match:
-                print "MATCHED"
-                print match.group(1)
-            else:
-                print "No match"
-                print msg_data[0][1]
-                #lines = msg_data[0][1].splitlines()
-                #for l in lines:
-                #    print l
-            hp = HTMLParser()
-            typ, msg_data = self.mail.uid('fetch', uid, '(BODY.PEEK[TEXT])')
-            print len(msg_data)
-            for response_part in msg_data:
-                if isinstance(response_part, tuple):
-                    #print(get_text(response_part[1]))
-                    print(hp.unescape(response_part[1]))
-                #print message.keys()
-                #print message['Content-Type']
-                #print get_text(message)
-                #print message.get_payload()[0]
-                #print "no txt: " + str(message)
-            continue
-            """
 
         body = self.parse_body(txt)
 
