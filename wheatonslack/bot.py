@@ -5,7 +5,7 @@ import logging
 
 from slackclient import SlackClient
 
-from wheatonslack.message import Message, Topic
+#from wheatonslack.message import Message, Topic
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +19,9 @@ class Bot(object):
 
         self.slack_client = SlackClient(os.environ.get('SLACK_BOT_TOKEN'))
         self.commands = [
-            CommandRecent(),
-            CommandLink(),
-            CommandReplay(),
+            #CommandRecent(),
+            #CommandLink(),
+            #CommandReplay(),
         ]
 
         self._init_channels()
@@ -45,12 +45,13 @@ class Bot(object):
         """
         pass
 
-    def post(self, channel_id, text):
-        self.slack_client.api_call(
+    def post(self, channel_id, text, **args):
+        return self.slack_client.api_call(
             "chat.postMessage", 
             channel=channel_id,
             text=text,
-            as_user=True
+            as_user=True,
+            **args
         )
 
     def rtm_post(self, channel_id, text):
@@ -118,6 +119,7 @@ class Bot(object):
                 )
 
 
+"""
 class CommandRecent(object):
     help_text = 'recent [n]'
 
@@ -195,3 +197,4 @@ class User(object):
     def __repr__(self):
         return "<User: %s>" % self.real_name
 
+"""
