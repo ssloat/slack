@@ -119,7 +119,9 @@ class Inbox(object):
     def post_reply(self, msg, thread_id):
         if thread_id not in self.timestamps:
             x = self.threads.find_one({'thread_id': thread_id})
-            if not x: return
+            if not x: 
+                self.post_new(msg, thread_id)
+                return
 
             self.timestamps[thread_id] = x['ts']
 
