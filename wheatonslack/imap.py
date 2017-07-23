@@ -50,17 +50,10 @@ class Inbox(object):
             'from': message['From'],
             'thread_id': thread_id,
             'body': body,
+            'subject': message['Subject'].replace('[wheaton-ultimate] ', ''),
         }
 
-        if 'In-Reply-To' not in message:
-            msg.update({
-                'subject': message['Subject'].replace('[wheaton-ultimate] ', ''),
-            })
-            self.post_new(msg, thread_id)
- 
-        else:
-            self.post_reply(msg, thread_id)
-
+        self.post(msg, thread_id)
         self.emails.insert_one(msg)
 
     def channel_id(self, msg):
@@ -116,7 +109,7 @@ class Inbox(object):
                 thread_ts=self.timestamps[thread_id],
             )
 
-    def post_reply(self, msg, thread_id):
+    def post(self, msg, thread_id):
         if thread_id not in self.timestamps:
             x = self.threads.find_one({'thread_id': thread_id})
             if not x: 
