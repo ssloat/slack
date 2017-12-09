@@ -43,12 +43,12 @@ class Inbox(object):
 
         msg = {
             'uid': uid,
+            'thread_id': thread_id,
             'date': datetime.datetime.fromtimestamp(
                 email.utils.mktime_tz(email.utils.parsedate_tz(message['Date']))
             ),
             'group': message['List-ID'][1:-1].replace('.googlegroups.com', ''),
             'from': message['From'],
-            'thread_id': thread_id,
             'body': body,
             'subject': message['Subject'].replace('[wheaton-ultimate] ', ''),
         }
@@ -94,7 +94,7 @@ class Inbox(object):
         result = self.bot.post(
             self.channel_id(msg), 
             "<!channel> From %s: %s\n%s" % (
-                email.utils.parseaddr(msg['from'])[0], 
+                parse_from(msg), 
                 msg['subject'],
                 (msg['body'][:450]+'...' if len(msg['body']) > 600 else msg['body']),
             )
@@ -120,19 +120,23 @@ class Inbox(object):
 
         self.bot.post(
             self.channel_id(msg), 
-            "From %s: %s" % (
-                email.utils.parseaddr(msg['from'])[0], msg['body']
-            ), 
+            "From %s: %s" % (parse_from(msg), msg['body']), 
             thread_ts=self.timestamps[thread_id],
         )
 
- 
+def parse_from(msg): 
+    addr = email.utils.parseaddr(msg['from'])
+    subj = msg['subject'].replace('|', '%7C')
+    if subj[:4] != 'Re: ':
+        subj = 'Re: '+subj
+
+    return '<mailto:%s?subject=Re: %s|%s>' % (addr[1], addr[0], subj) 
 
 def get_text(msg):
     text = ""
     if msg.is_multipart():
         html = None
-        for part in msg.get_payload():
+        for part in msg.walk():
             if part.get_content_charset() is None:
                 charset = chardet.detect(str(part))['encoding']
             else:
@@ -145,7 +149,7 @@ def get_text(msg):
                     "ignore"
                 ).encode('utf8','replace')
 
-            if part.get_content_type() == 'text/html':
+            elif part.get_content_type() == 'text/html':
                 html = unicode(
                     part.get_payload(decode=True),
                     str(charset),
