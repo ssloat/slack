@@ -34,6 +34,8 @@ def main():
         bot,
     )
 
+    inbox.post = inbox.post_unthreaded
+
     if args.prime:
         date = datetime.date.today() - datetime.timedelta(days=365)
         inbox.run(date)

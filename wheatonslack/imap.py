@@ -4,6 +4,7 @@ import re
 import chardet
 import datetime
 import time
+import urllib
 
 from HTMLParser import HTMLParser
 
@@ -41,6 +42,7 @@ class Inbox(object):
 
         body = self.parse_body(txt)
 
+        subj = message['Subject'].replace('[wheaton-ultimate] ', '')
         msg = {
             'uid': uid,
             'thread_id': thread_id,
@@ -50,15 +52,15 @@ class Inbox(object):
             'group': message['List-ID'][1:-1].replace('.googlegroups.com', ''),
             'from': message['From'],
             'body': body,
-            'subject': message['Subject'].replace('[wheaton-ultimate] ', ''),
+            'subject': "".join(subj.splitlines()),
         }
 
         self.post(msg, thread_id)
         self.emails.insert_one(msg)
 
     def channel_id(self, msg):
-        #return self.bot.channel_ids[ msg['group'] ]
-        return self.bot.channel_ids['sloat-testing']
+        return self.bot.channel_ids[ msg['group'] ]
+        #return self.bot.channel_ids['sloat-testing']
 
     def fetch_message(self, uid):
         result, data = self.mail.uid('fetch', uid, '(X-GM-THRID RFC822)')
@@ -90,30 +92,33 @@ class Inbox(object):
 
         return body
 
-    def post_new(self, msg, thread_id):
+    def post_new(self, msg, channel=True):
         result = self.bot.post(
             self.channel_id(msg), 
-            "<!channel> From %s: %s\n%s" % (
+            "%sFrom %s: %s\n%s" % (
+                ('<!channel> ' if channel else ''),
                 parse_from(msg), 
                 msg['subject'],
                 (msg['body'][:450]+'...' if len(msg['body']) > 600 else msg['body']),
             )
         )
-        self.timestamps[thread_id] = result['ts']
-        self.threads.insert_one({'thread_id': thread_id, 'ts': result['ts']})
-
         if len(msg['body']) > 600:
             self.bot.post(
                 self.channel_id(msg), 
                 "...%s" % msg['body'][450:],
-                thread_ts=self.timestamps[thread_id],
+                thread_ts=result['ts'],
             )
+
+        return result['ts']
 
     def post(self, msg, thread_id):
         if thread_id not in self.timestamps:
             x = self.threads.find_one({'thread_id': thread_id})
             if not x: 
-                self.post_new(msg, thread_id)
+                ts = self.post_new(msg)
+                self.timestamps[thread_id] = ts
+                self.threads.insert_one({'thread_id': thread_id, 'ts': ts})
+
                 return
 
             self.timestamps[thread_id] = x['ts']
@@ -124,40 +129,59 @@ class Inbox(object):
             thread_ts=self.timestamps[thread_id],
         )
 
+    def post_unthreaded(self, msg, thread_id):
+        if thread_id not in self.timestamps:
+            x = self.threads.find_one({'thread_id': thread_id})
+            if not x: 
+                ts = self.post_new(msg)
+                self.timestamps[thread_id] = ts
+                self.threads.insert_one({'thread_id': thread_id, 'ts': ts})
+
+                return
+
+            self.timestamps[thread_id] = x['ts']
+ 
+        if len(msg['subject']) > 30:
+            msg['subject'] = "%s..." % msg['subject'][:30]
+
+        self.post_new(msg, False)
+
+
 def parse_from(msg): 
     addr = email.utils.parseaddr(msg['from'])
-    subj = msg['subject'].replace('|', '%7C')
+
+    subj = msg['subject']
     if subj[:4] != 'Re: ':
         subj = 'Re: '+subj
 
-    return '<mailto:%s?subject=Re: %s|%s>' % (addr[1], addr[0], subj) 
+    subj = urllib.urlencode([('subject', msg['subject'])])
+    subj = subj.replace('+', ' ')
+    return '<mailto:%s?%s|%s>' % (addr[1], subj, addr[0]) 
 
 def get_text(msg):
     text = ""
     if msg.is_multipart():
         html = None
         for part in msg.walk():
+            payload = part.get_payload(decode=True)
+            if not payload:
+                continue
+
             if part.get_content_charset() is None:
                 charset = chardet.detect(str(part))['encoding']
             else:
                 charset = part.get_content_charset()
 
+            x = unicode(payload, str(charset), "ignore")
+            x = x.encode('utf8','replace')
+            
             if part.get_content_type() == 'text/plain':
-                text = unicode(
-                    part.get_payload(decode=True),
-                    str(charset),
-                    "ignore"
-                ).encode('utf8','replace')
+                text = x
 
             elif part.get_content_type() == 'text/html':
-                html = unicode(
-                    part.get_payload(decode=True),
-                    str(charset),
-                    "ignore"
-                ).encode('utf8','replace')
+                html = x
 
-        if text != "":
-            return text.strip()
+        if text != "": return text.strip()
         return text.strip() if html is None else html.strip()
 
     else:
