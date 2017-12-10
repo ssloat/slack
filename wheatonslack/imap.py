@@ -59,7 +59,11 @@ class Inbox(object):
         self.emails.insert_one(msg)
 
     def channel_id(self, msg):
-        return self.bot.channel_ids[ msg['group'] ]
+        group_map = {
+            'wheaton-soccer': 'sports-soccer',
+            'wheaton-ultimate': 'social',
+        }
+        return self.bot.channel_ids[ group_map.get(msg['group'], 'sloat-testing') ]
         #return self.bot.channel_ids['sloat-testing']
 
     def fetch_message(self, uid):
