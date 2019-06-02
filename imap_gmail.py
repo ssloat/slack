@@ -1,5 +1,3 @@
-import imaplib
-import email
 import datetime
 import os
 import sys
@@ -26,38 +24,55 @@ def main():
     )
 
     mongo = MongoClient(os.environ.get('MONGO_DB_URI'))
-    bot = Bot(None)
-    inbox = Inbox(
-        os.environ.get('SENDER_USER'), 
-        os.environ.get('SENDER_PASS'),
-        mongo['slack'],
-        bot,
-    )
+    slack = MongoClient(os.environ.get('MONGO_DB_URI'))['slack']
 
-    inbox.post = inbox.post_unthreaded
+    bot = Bot()
+    inbox = Inbox(os.environ.get('SENDER_USER'), os.environ.get('SENDER_PASS'))
 
-    if args.prime:
-        date = datetime.date.today() - datetime.timedelta(days=365)
-        inbox.run(date)
-        sys.exit(0)
+    delta = 365 if args.prime else 3
+    date = datetime.date.today() - datetime.timedelta(days=delta)
 
+    timestamps = {}
+    for uid in inbox.search(date):
+        if slack.emails.find_one({'uid': uid}):
+            continue
 
-    date = datetime.date.today() - datetime.timedelta(days=3)
-    inbox.run(date)
-    #inbox.process_uid(120)
-    #inbox.process_uid(140)
+        msg = inbox.process_uid(uid)
+        slack.emails.insert_one(msg) 
 
-    """
-    bot.slack_client.rtm_connect()
-    while True:
-        inbox.run(bot)
+        msg_args = {
+            'group': msg['group'],
+            'subject': msg['subject'],
+            'from_': parse_from(msg),
+            'body': msg['body'],
+            'channel': False,
+        }
 
-        slack_out = bot.slack_client.rtm_read()
-        bot.parse_slack_output(slack_out)
+        thread_id = msg['thread_id']
+        if thread_id in timestamps:
+            bot.post(**msg_args)
+            continue
 
-        time.sleep(1)
-    """
+        x = slack.threads.find_one({'thread_id': thread_id})
+        if x: 
+            timestamps[thread_id] = x['ts']
+            bot.post(**msg_args)
+            continue
+
+        msg_args['channel'] = True
+        ts = bot.post(**msg_args)
+        timestamps[thread_id] = ts
+        slack.threads.insert_one({
+            'ts': ts, 
+            'thread_id': thread_id, 
+            'subject': msg['subject'],
+            'tags': msg['tags'],
+            'from': msg['from'],
+            'group': msg['group'],
+            'date': msg['date'],
+        })
 
 
 if __name__ == '__main__':
     main()
+

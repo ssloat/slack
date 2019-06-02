@@ -14,7 +14,7 @@ SENDER_USER = os.environ.get('SENDER_USER')
 SENDER_PASS = os.environ.get('SENDER_PASS')
 
 class Bot(object):
-    def __init__(self, db_session):
+    def __init__(self, db_session=None):
         self.db_session = db_session
 
         self.slack_client = SlackClient(os.environ.get('SLACK_BOT_TOKEN'))
@@ -35,6 +35,15 @@ class Bot(object):
         self.channels = dict([(x['id'], x['name']) for x in channels['channels']])
         self.channel_ids = dict( (v, k) for k, v in self.channels.items() )
 
+    def channel_id(self, group):
+        group_map = {
+            'wheaton-soccer': 'sports-soccer',
+            'wheaton-ultimate': 'social',
+        }
+        #return self.channel_ids[ group_map.get(msg['group'], 'sloat-testing') ]
+        return self.channel_ids[ group_map.get(group, 'sloat-testing') ]
+        #return self.channel_ids['sloat-testing']
+
     def _init_members(self):
         """
         members = self.slack_client.api_call('users.list')
@@ -45,14 +54,38 @@ class Bot(object):
         """
         pass
 
-    def post(self, channel_id, text, **args):
-        return self.slack_client.api_call(
+    def post(self, group, subject, from_, body, channel, **args):
+        ch_id = self.channel_id(group)
+
+        if len(subject) > 30:
+            subject = "%s..." % subject[:30]
+
+        text = "%sFrom %s: %s\n%s" % (
+            ('<!channel> ' if channel else ''),
+            from_, 
+            subject,
+            (body[:450]+'...' if len(body) > 600 else body),
+        )
+
+        result = self.slack_client.api_call(
             "chat.postMessage", 
-            channel=channel_id,
+            channel=ch_id,
             text=text,
             as_user=True,
             **args
         )
+        
+        if len(body) > 600:
+            self.slack_client.api_call(
+                "chat.postMessage", 
+                channel=ch_id,
+                text="...%s" % body[450:],
+                as_user=True,
+                thread_ts=result['ts'],
+                **args
+            )
+
+        return result['ts']
 
     def rtm_post(self, channel_id, text):
         self.slack_client.rtm_send_message(channel_id, text)

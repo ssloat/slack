@@ -5,35 +5,31 @@ import chardet
 import datetime
 import time
 import urllib
+from wheatonslack import tags
 
 from HTMLParser import HTMLParser
 
 class Inbox(object):
-    def __init__(self, user, pwd, mongo, bot):
+    def __init__(self, user, pwd):
         self.mail = imaplib.IMAP4_SSL('imap.gmail.com')
         self.mail.login(user, pwd)
         self.mail.select('inbox')
-
-        self.uids = {}
-        self.timestamps = {}
-        self.threads = mongo['threads']
-        self.emails = mongo['emails']
-        self.bot = bot
         
-    def run(self, date):
-
+    def search(self, date):
         result, data = self.mail.uid('search', None, "(SENTSINCE %s)" % date.strftime('%d-%b-%Y'))
+        return set(data[0].split())
 
-        mail_ids = [uid for uid in data[0].split() if not self.is_processed(uid)]
+    def fetch_message(self, uid):
+        result, data = self.mail.uid('fetch', uid, '(X-GM-THRID RFC822)')
+        thread_id = re.match('.*X-GM-THRID (\d+)', data[0][0]).group(1)
+        raw_email = data[0][1]
 
-        for uid in mail_ids:
-            self.process_uid(uid)
+        return thread_id, email.message_from_string(raw_email)
 
     def process_uid(self, uid):
         thread_id, message = self.fetch_message(uid)
 
         if not message or 'List-ID' not in message:
-            self.uids[uid] = True
             return
 
         txt = get_text(message) 
@@ -55,30 +51,9 @@ class Inbox(object):
             'subject': "".join(subj.splitlines()),
         }
 
-        self.post(msg, thread_id)
-        self.emails.insert_one(msg)
+        msg['tags'] = tags.msg_tags(msg)
 
-    def channel_id(self, msg):
-        group_map = {
-            'wheaton-soccer': 'sports-soccer',
-            'wheaton-ultimate': 'social',
-        }
-        return self.bot.channel_ids[ group_map.get(msg['group'], 'sloat-testing') ]
-        #return self.bot.channel_ids['sloat-testing']
-
-    def fetch_message(self, uid):
-        result, data = self.mail.uid('fetch', uid, '(X-GM-THRID RFC822)')
-        thread_id = re.match('.*X-GM-THRID (\d+)', data[0][0]).group(1)
-        raw_email = data[0][1]
-
-        return thread_id, email.message_from_string(raw_email)
-
-    def is_processed(self, uid):
-        if uid in self.uids or self.emails.find_one({'uid': uid}):
-            self.uids['uid'] = True
-            return True
-
-        return False
+        return msg
 
     def parse_body(self, txt):
         lines = txt.splitlines()
@@ -95,60 +70,6 @@ class Inbox(object):
             body = match.group(1)
 
         return body
-
-    def post_new(self, msg, channel=True):
-        result = self.bot.post(
-            self.channel_id(msg), 
-            "%sFrom %s: %s\n%s" % (
-                ('<!channel> ' if channel else ''),
-                parse_from(msg), 
-                msg['subject'],
-                (msg['body'][:450]+'...' if len(msg['body']) > 600 else msg['body']),
-            )
-        )
-        if len(msg['body']) > 600:
-            self.bot.post(
-                self.channel_id(msg), 
-                "...%s" % msg['body'][450:],
-                thread_ts=result['ts'],
-            )
-
-        return result['ts']
-
-    def post(self, msg, thread_id):
-        if thread_id not in self.timestamps:
-            x = self.threads.find_one({'thread_id': thread_id})
-            if not x: 
-                ts = self.post_new(msg)
-                self.timestamps[thread_id] = ts
-                self.threads.insert_one({'thread_id': thread_id, 'ts': ts})
-
-                return
-
-            self.timestamps[thread_id] = x['ts']
-
-        self.bot.post(
-            self.channel_id(msg), 
-            "From %s: %s" % (parse_from(msg), msg['body']), 
-            thread_ts=self.timestamps[thread_id],
-        )
-
-    def post_unthreaded(self, msg, thread_id):
-        if thread_id not in self.timestamps:
-            x = self.threads.find_one({'thread_id': thread_id})
-            if not x: 
-                ts = self.post_new(msg)
-                self.timestamps[thread_id] = ts
-                self.threads.insert_one({'thread_id': thread_id, 'ts': ts})
-
-                return
-
-            self.timestamps[thread_id] = x['ts']
- 
-        if len(msg['subject']) > 30:
-            msg['subject'] = "%s..." % msg['subject'][:30]
-
-        self.post_new(msg, False)
 
 
 def parse_from(msg): 
@@ -196,3 +117,4 @@ def get_text(msg):
         ).encode('utf8','replace')
 
         return text.strip()
+
